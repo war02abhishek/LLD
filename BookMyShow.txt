@@ -1,0 +1,252 @@
+class Movie {
+    String movieId;
+    String title;
+
+    public Movie(String movieId, String title) {
+        this.movieId = movieId;
+        this.title = title;
+    }
+}
+class Seat{
+     String seatNumber;
+	 boolean isReserved=false;
+	 Seat(int seatNumber){
+	     this.seatNumber=seatNumber;
+	 }	 
+	 public synchronized boolean reserveIt(){
+	    if (!isReserved) {
+            isReserved = true;
+            return true;
+        }
+        return false;
+	 }
+	 public boolean isAvailable(){
+	    return isReserved;
+	 }
+}
+
+class Show {
+    String showId;
+    Movie movie;
+    String startTime;
+	List<Seat>list;
+	Map<Integer,Seat>mp=new HashMap<>();
+
+    public Show(String showId, Movie movie, String time,int totalSeats) {
+        this.showId = showId;
+        this.movie = movie;
+        this.startTime = time;
+		for(int i=0;i<totalSeats;i++){
+		   mp.put(i,new Seat());
+		}
+    }
+	 public synchronized boolean bookSeats(List<Integer> seatNumbers) {
+        // Check if all are available
+        for (int sn : seatNumbers) {
+            if (!seatMap.containsKey(sn) || !seatMap.get(sn).isAvailable()) {
+                return false;
+            }
+        }
+        // Book them
+        for (int sn : seatNumbers) {
+            seatMap.get(sn).book();
+        }
+        return true;
+    }
+	
+	public void showAvailableSeats() {
+        for (Map.Entry<Integer, Seat> entry : seatMap.entrySet()) {
+            if (entry.getValue().isAvailable()) {
+                System.out.print(entry.getKey() + " ");
+            }
+        }
+        System.out.println();
+    }
+	public synchronized void releaseSeats(List<Integer> seatNumbers) {
+    for (int sn : seatNumbers) {
+        if (seatMap.containsKey(sn)) {
+            seatMap.get(sn).isBooked = false; // manually unbooking
+        }
+    }
+}
+
+	
+}
+
+
+class Screen {
+    String screenId;
+    List<Show> shows = new ArrayList<>();
+
+    public Screen(String screenId) {
+        this.screenId = screenId;
+    }
+
+    public void addShow(Show show) {
+        shows.add(show);
+    }
+
+    public void removeShow(String showId) {
+        shows.removeIf(s -> s.showId.equals(showId));
+    }
+}
+
+class Theater {
+    String theaterId;
+    String name;
+    List<Screen> screens = new ArrayList<>();
+	
+
+    public Theater(String id, String name) {
+        this.theaterId = id;
+        this.name = name;
+    }
+
+    public Screen getScreenById(String screenId) {
+        for (Screen screen : screens) {
+            if (screen.screenId.equals(screenId)) return screen;
+        }
+        return null;
+    }
+	public List<Movie> getAllMovies() {
+    Set<String> seen = new HashSet<>(); // to avoid duplicates
+    List<Movie> listOfMovies = new ArrayList<>();
+
+    for (Screen s : screens) {
+        for (Show show : s.shows) {
+            if (!seen.contains(show.movie.movieId)) {
+                listOfMovies.add(show.movie);
+                seen.add(show.movie.movieId);
+            }
+        }
+    }
+    return listOfMovies;
+}
+
+}
+
+enum BookingStatus {
+    PENDING,
+    CONFIRMED,
+    CANCELLED
+}
+
+class Booking {
+    String bookingId;
+    String userId;
+    Show show;
+    List<Integer> seats;
+    BookingStatus status;
+
+    public Booking(String bookingId, String userId, Show show, List<Integer> seats) {
+        this.bookingId = bookingId;
+        this.userId = userId;
+        this.show = show;
+        this.seats = seats;
+        this.status = BookingStatus.PENDING;
+    }
+
+    public void confirm() {
+        this.status = BookingStatus.CONFIRMED;
+    }
+
+    public void cancel() {
+        this.status = BookingStatus.CANCELLED;
+    }
+}
+
+
+class PaymentService {
+    public static boolean makePayment(String userId, double amount) {
+        System.out.println("Payment of Rs. " + amount + " done for user: " + userId);
+        return true;
+    }
+}
+
+class BookingService{
+public static Booking bookShow(String userId, Show show, List<Integer> seats) {
+    boolean success = show.bookSeats(seats);
+    if (!success) {
+        System.out.println("Seat(s) not available.");
+        return null;
+    }
+
+    boolean payment = PaymentService.makePayment(userId, seats.size() * 200);
+    if (!payment) {
+        System.out.println("Payment failed. Rolling back seat booking...");
+        show.releaseSeats(seats); // ✅ rollback
+        return null;
+    }
+
+    Booking booking = new Booking("BK_" + userId + "_" + show.showId, userId, show, seats);
+    booking.confirm();
+    System.out.println("Booking successful!");
+    return booking;
+}
+}
+
+class Admin {
+    String adminId;
+    String name;
+
+    public Admin(String id, String name) {
+        this.adminId = id;
+        this.name = name;
+    }
+
+    public void addShow(Theater theater, String screenId, Movie movie, String time, String showId,Integer capacity) {
+        Screen screen = theater.getScreenById(screenId);
+        if (screen != null) {
+            Show show = new Show(showId, movie, time,capacity);
+            screen.addShow(show);
+            System.out.println("Show added successfully.");
+        }
+    }
+
+    public void removeShow(Theater theater, String screenId, String showId) {
+        Screen screen = theater.getScreenById(screenId);
+        if (screen != null) {
+            screen.removeShow(showId);
+            System.out.println("Show removed successfully.");
+        }
+    }
+}
+
+
+public class BookMyShowApp {
+    public static void main(String[] args) {
+        Admin admin = new Admin("A1", "Abhishek");
+
+        Theater theater = new Theater("T1", "PVR Delhi");
+        Screen screen1 = new Screen("S1");
+        theater.screens.add(screen1);
+
+        Movie movie = new Movie("M1", "Oppenheimer");
+
+        // Admin adds a show
+        admin.addShow(theater, "S1", movie, "6:00 PM", "SH1",10);
+
+        // Try to remove it
+        admin.removeShow(theater, "S1", "SH1");
+		
+		
+		User user=new User("B1","baburao");
+		 
+
+        // Display available seats
+        System.out.print("Available seats: ");
+        show.showAvailableSeats();
+
+        // User tries to book
+        List<Integer> seats = Arrays.asList(2, 3, 4);
+        Booking booking = BookingService.bookShow("U1", show, seats);
+
+        // Show booked seats after
+        System.out.print("Remaining seats: ");
+        show.showAvailableSeats();
+    }
+}
+
+
+
+
