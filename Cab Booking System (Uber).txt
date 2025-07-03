@@ -1,0 +1,216 @@
+class Location {
+    double latitude;
+    double longitude;
+
+    public Location(double lat, double lon) {
+        this.latitude = lat;
+        this.longitude = lon;
+    }
+
+    public double distanceTo(Location other) {
+        // Haversine formula can be added for realism
+        return Math.sqrt(Math.pow(this.latitude - other.latitude, 2)
+                       + Math.pow(this.longitude - other.longitude, 2));
+    }
+}
+
+
+abstract class User {
+    String userId;
+    String name;
+}
+
+class Rider extends User {
+    public Rider(String id, String name) {
+        this.userId = id;
+        this.name = name;
+    }
+}
+
+class Driver extends User {
+    Cab cab;
+
+    public Driver(String id, String name, Cab cab) {
+        this.userId = id;
+        this.name = name;
+        this.cab = cab;
+    }
+
+    public void updateLocation(Location loc) {
+        cab.setLocation(loc);
+    }
+
+    public void setAvailability(boolean available) {
+        cab.setAvailable(available);
+    }
+}
+
+enum CabType { MINI, SEDAN, SUV }
+
+class Cab {
+    String cabId;
+    Driver driver;
+    CabType type;
+    Location currentLocation;
+    boolean isAvailable;
+
+    public Cab(String id, Driver driver, CabType type) {
+        this.cabId = id;
+        this.driver = driver;
+        this.type = type;
+        this.isAvailable = true;
+    }
+
+    public void setLocation(Location loc) {
+        this.currentLocation = loc;
+    }
+
+    public void setAvailable(boolean status) {
+        this.isAvailable = status;
+    }
+}
+
+
+class Driver{
+     string driverName,
+	 Cab cab;
+	 boolean isAvailable;
+	 Location location;
+	 
+	
+
+}
+class RideRequest {
+    Rider rider;
+    Location source;
+    Location destination;
+    CabType preferredType;
+
+    public RideRequest(Rider rider, Location src, Location dest, CabType type) {
+        this.rider = rider;
+        this.source = src;
+        this.destination = dest;
+        this.preferredType = type;
+    }
+}
+
+enum RideStatus { REQUESTED, ONGOING, COMPLETED, CANCELLED }
+
+class Ride {
+    Rider rider;
+    Driver driver;
+    Location source;
+    Location destination;
+    RideStatus status;
+
+    public Ride(Rider rider, Driver driver, Location src, Location dest) {
+        this.rider = rider;
+        this.driver = driver;
+        this.source = src;
+        this.destination = dest;
+        this.status = RideStatus.REQUESTED;
+    }
+
+    public void startRide() {
+        status = RideStatus.ONGOING;
+    }
+
+    public void completeRide() {
+        status = RideStatus.COMPLETED;
+    }
+
+    public void cancelRide() {
+        status = RideStatus.CANCELLED;
+    }
+}
+
+class CabManager {
+    List<Cab> allCabs = new ArrayList<>();
+
+    public void registerCab(Cab cab) {
+        allCabs.add(cab);
+    }
+
+    public List<Cab> getNearbyAvailableCabs(Location location, CabType type, double radius) {
+        List<Cab> result = new ArrayList<>();
+        for (Cab cab : allCabs) {
+            if (cab.isAvailable && cab.type == type &&
+                cab.currentLocation.distanceTo(location) <= radius) {
+                result.add(cab);
+            }
+        }
+        return result;
+    }
+}
+
+class RideService {
+    CabManager cabManager;
+
+    public RideService(CabManager cabManager) {
+        this.cabManager = cabManager;
+    }
+
+    public Ride bookRide(RideRequest request) {
+        List<Cab> cabs = cabManager.getNearbyAvailableCabs(request.source, request.preferredType, 10.0);
+        if (cabs.isEmpty()) {
+            System.out.println("No cabs available!");
+            return null;
+        }
+
+        Cab selectedCab = cabs.get(0); // Just pick the first for now
+        selectedCab.setAvailable(false);
+
+        Ride ride = new Ride(request.rider, selectedCab.driver, request.source, request.destination);
+        ride.startRide();
+        System.out.println("Ride booked with driver: " + selectedCab.driver.name);
+        return ride;
+    }
+}
+
+
+
+public class CabBookingApp {
+    public static void main(String[] args) {
+        // Step 1: Setup system
+        CabManager cabManager = new CabManager();
+        RideService rideService = new RideService(cabManager);
+
+        // Step 2: Create drivers and register their cabs
+        Driver driver1 = new Driver("D1", "Amit", null);
+        Cab cab1 = new Cab("C1", driver1, CabType.SEDAN);
+        cab1.setLocation(new Location(10.0, 20.0));
+        driver1.cab = cab1;
+
+        Driver driver2 = new Driver("D2", "Neha", null);
+        Cab cab2 = new Cab("C2", driver2, CabType.SEDAN);
+        cab2.setLocation(new Location(10.5, 20.1));
+        driver2.cab = cab2;
+
+        cabManager.registerCab(cab1);
+        cabManager.registerCab(cab2);
+
+        driver1.setAvailability(true);
+        driver2.setAvailability(true);
+
+        // Step 3: Create a rider
+        Rider rider = new Rider("R1", "Abhishek");
+        Location riderSource = new Location(10.1, 20.1);
+        Location riderDestination = new Location(11.0, 21.0);
+
+        // Step 4: Rider requests a ride
+        RideRequest request = new RideRequest(rider, riderSource, riderDestination, CabType.SEDAN);
+        Ride ride = rideService.bookRide(request);
+
+        if (ride != null) {
+            // Step 5: Simulate trip
+            System.out.println("Ride started from " + riderSource.latitude + "," + riderSource.longitude);
+            try {
+                Thread.sleep(2000); // simulate 2 seconds ride time
+            } catch (InterruptedException ignored) {}
+
+            ride.completeRide();
+            ride.driver.cab.setAvailable(true); // make cab available again
+            System.out.println("Ride completed successfully!");
+        }
+    }
+}
