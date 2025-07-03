@@ -1,0 +1,148 @@
+class Slot {
+    int slotNumber;
+    VehicleType type;
+    boolean isOccupied;
+    Vehicle vehicle;
+
+    public Slot(int slotNumber, VehicleType type) {
+        this.slotNumber = slotNumber;
+        this.type = type;
+        this.isOccupied = false;
+    }
+
+    public boolean isFree() {
+        return !isOccupied;
+    }
+
+    public boolean park(Vehicle v) {
+        if (isFree() && v.type == this.type) {
+            this.vehicle = v;
+            this.isOccupied = true;
+            return true;
+        }
+        return false;
+    }
+
+    public void unpark() {
+        this.vehicle = null;
+        this.isOccupied = false;
+    }
+}
+
+class Floor {
+    int floorNumber;
+    List<Slot> slots = new ArrayList<>();
+
+    public Floor(int floorNumber) {
+        this.floorNumber = floorNumber;
+    }
+
+    public Optional<Slot> findFreeSlot(VehicleType type) {
+        for (Slot s : slots) {
+            if (s.type == type && s.isFree()) return Optional.of(s);
+        }
+        return Optional.empty();
+    }
+}
+
+class ParkingLot {
+    String lotId;
+    List<Floor> floors = new ArrayList<>();
+
+    public ParkingLot(String lotId) {
+        this.lotId = lotId;
+    }
+
+    public Optional<Slot> getNearestSlot(Vehicle vehicle) {
+        for (Floor f : floors) {
+            Optional<Slot> slot = f.findFreeSlot(vehicle.type);
+            if (slot.isPresent()) return slot;
+        }
+        return Optional.empty();
+    }
+}
+
+class Ticket {
+    String ticketId;
+    Vehicle vehicle;
+    Slot slot;
+    long entryTime;
+
+    public Ticket(String ticketId, Vehicle v, Slot slot) {
+        this.ticketId = ticketId;
+        this.vehicle = v;
+        this.slot = slot;
+        this.entryTime = System.currentTimeMillis();
+    }
+}
+
+class PaymentService {
+    
+	
+    public boolean makePayment(String vehicleNumber, double amount) {
+        System.out.println("Processing payment of ₹" + amount + " for vehicle " + vehicleNumber + "...");
+        // Mocking always successful payment
+        System.out.println("Payment successful ✅");
+        return true;
+    }
+}
+
+
+
+class ParkingService {
+    Map<String, Ticket> activeTickets = new HashMap<>();
+    ParkingLot lot;
+
+    public ParkingService(ParkingLot lot) {
+        this.lot = lot;
+    }
+
+    public Ticket park(Vehicle v) {
+        Optional<Slot> optionalSlot = lot.getNearestSlot(v);
+        if (optionalSlot.isEmpty()) {
+            System.out.println("No slot available for vehicle " + v.number);
+            return null;
+        }
+
+        Slot slot = optionalSlot.get();
+        slot.park(v);
+        String ticketId = "T-" + v.number + "-" + System.currentTimeMillis();
+        Ticket ticket = new Ticket(ticketId, v, slot);
+        activeTickets.put(ticketId, ticket);
+
+        System.out.println("Parked at slot " + slot.slotNumber);
+        return ticket;
+    }
+
+    public void unpark(String ticketId) {
+        if (!activeTickets.containsKey(ticketId)) {
+            System.out.println("Invalid ticket.");
+            return;
+        }
+
+        Ticket ticket = activeTickets.get(ticketId);
+        long duration = (System.currentTimeMillis() - ticket.entryTime) / 1000; // seconds
+        double fee = calculateFee(ticket.vehicle.type, duration);
+		
+		 boolean paid = paymentService.makePayment(ticket.vehicle.number, fee);
+        if (!paid) {
+            System.out.println("Payment failed ❌. Vehicle cannot exit.");
+            return;
+        }
+
+        ticket.slot.unpark();
+        activeTickets.remove(ticketId);
+
+        System.out.println("Vehicle " + ticket.vehicle.number + " unparked. Fee: ₹" + fee);
+    }
+
+    private double calculateFee(VehicleType type, long duration) {
+        int rate = switch (type) {
+            case BIKE -> 1;
+            case CAR -> 2;
+            case TRUCK -> 3;
+        };
+        return Math.max(10, duration * rate); // min ₹10
+    }
+}
+
