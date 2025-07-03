@@ -28,6 +28,17 @@ class Slot {
         this.isOccupied = false;
     }
 }
+enum VehicleType { BIKE, CAR, TRUCK }
+
+class Vehicle {
+    String number;
+    VehicleType type;
+    
+    public Vehicle(String number, VehicleType type) {
+        this.number = number;
+        this.type = type;
+    }
+}
 
 class Floor {
     int floorNumber;
@@ -92,10 +103,17 @@ class PaymentService {
 class ParkingService {
     Map<String, Ticket> activeTickets = new HashMap<>();
     ParkingLot lot;
+   // In ParkingService:
+    private PaymentService paymentService;
 
     public ParkingService(ParkingLot lot) {
         this.lot = lot;
     }
+
+    public ParkingService(ParkingLot lot, PaymentService paymentService) {
+          this.lot = lot;
+         this.paymentService = paymentService;
+   }
 
     public Ticket park(Vehicle v) {
         Optional<Slot> optionalSlot = lot.getNearestSlot(v);
