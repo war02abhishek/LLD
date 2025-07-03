@@ -1,0 +1,151 @@
+
+enum RoomType {
+    SINGLE, DOUBLE, SUITE
+}
+
+enum RoomStatus {
+    AVAILABLE, BOOKED, CLEANING
+}
+
+abstract class User {
+    String userId;
+    String name;
+
+    public User(String id, String name) {
+        this.userId = id;
+        this.name = name;
+    }
+}
+
+class Guest extends User {
+    public Guest(String id, String name) {
+        super(id, name);
+    }
+}
+
+class Admin extends User {
+    public Admin(String id, String name) {
+        super(id, name);
+    }
+}
+
+
+class Room {
+    String roomNumber;
+    RoomType type;
+    double pricePerNight;
+    RoomStatus status;
+
+    public Room(String number, RoomType type, double price) {
+        this.roomNumber = number;
+        this.type = type;
+        this.pricePerNight = price;
+        this.status = RoomStatus.AVAILABLE;
+    }
+
+    public boolean isAvailable() {
+        return status == RoomStatus.AVAILABLE;
+    }
+}
+
+class Floor {
+    int floorNumber;
+    List<Room> rooms = new ArrayList<>();
+
+    public Floor(int number) {
+        this.floorNumber = number;
+    }
+}
+
+class Hotel {
+    String hotelId;
+    String name;
+    List<Floor> floors = new ArrayList<>();
+
+    public Hotel(String id, String name) {
+        this.hotelId = id;
+        this.name = name;
+    }
+
+    public List<Room> getAvailableRooms(RoomType type) {
+        List<Room> result = new ArrayList<>();
+        for (Floor floor : floors) {
+            for (Room room : floor.rooms) {
+                if (room.type == type && room.isAvailable()) {
+                    result.add(room);
+                }
+            }
+        }
+        return result;
+    }
+}
+//since method is static we can diecty call by className
+class PaymentService {
+    public static boolean makePayment(String guestId, double amount) {
+        System.out.println("Charging ₹" + amount + " to guest: " + guestId);
+        return true; // always succeeds for mock
+    }
+}
+
+
+class BookingService {
+    Hotel hotel;
+
+    public BookingService(Hotel hotel) {
+        this.hotel = hotel;
+    }
+
+    public Reservation bookRoom(Guest guest, RoomType type, LocalDate start, LocalDate end) {
+        List<Room> available = hotel.getAvailableRooms(type);
+        if (available.isEmpty()) {
+            System.out.println("No rooms available for type: " + type);
+            return null;
+        }
+
+        Room room = available.get(0);
+        double cost = ChronoUnit.DAYS.between(start, end) * room.pricePerNight;
+
+        if (!PaymentService.makePayment(guest.userId, cost)) {
+            System.out.println("Payment failed.");
+            return null;
+        }
+
+        room.status = RoomStatus.BOOKED;
+        Reservation reservation = new Reservation("R-" + guest.userId, guest, room, start, end);
+        System.out.println("Booking confirmed for Room " + room.roomNumber);
+        return reservation;
+    }
+}
+
+
+
+
+
+
+
+
+public class HotelApp {
+    public static void main(String[] args) {
+        // Setup hotel with rooms
+        Hotel hotel = new Hotel("H1", "Taj Palace");
+        Floor floor1 = new Floor(1);
+        floor1.rooms.add(new Room("101", RoomType.SINGLE, 3000));
+        floor1.rooms.add(new Room("102", RoomType.DOUBLE, 5000));
+        hotel.floors.add(floor1);
+
+        BookingService bookingService = new BookingService(hotel);
+
+        // Create a guest
+        Guest guest = new Guest("G1", "Abhishek");
+
+        // Book a room
+        Reservation res = bookingService.bookRoom(guest, RoomType.SINGLE,
+                LocalDate.of(2025, 7, 10), LocalDate.of(2025, 7, 12));
+
+        // Cancel it
+        if (res != null) {
+            res.cancel();
+            System.out.println("Reservation cancelled.");
+        }
+    }
+}
