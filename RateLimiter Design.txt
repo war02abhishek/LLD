@@ -1,0 +1,155 @@
+interface RateLimiter {
+    boolean allowRequest(String userId);
+}
+
+
+//single user can do maxRequests in particualr window not more than that
+class FixedWindowRateLimiter implements RateLimiter {
+    private final int maxRequests;
+    private final long windowSizeInMillis;
+
+    // userId → (windowStartTime, requestCount)
+    private final Map<String, UserBucket> userBuckets = new HashMap<>();
+
+    public FixedWindowRateLimiter(int maxRequests, long windowSizeInSeconds) {
+        this.maxRequests = maxRequests;
+        this.windowSizeInMillis = windowSizeInSeconds * 1000;
+    }
+
+    @Override
+    public synchronized boolean allowRequest(String userId) {
+        long currentTime = System.currentTimeMillis();
+        UserBucket bucket = userBuckets.getOrDefault(userId, new UserBucket(0, 0));
+
+        // If current window expired → reset counter
+        if (currentTime - bucket.windowStartTime >= windowSizeInMillis) {
+            bucket.windowStartTime = currentTime;
+            bucket.requestCount = 1;
+            userBuckets.put(userId, bucket);
+            return true;
+        }
+
+        // Within current window
+        if (bucket.requestCount < maxRequests) {
+            bucket.requestCount++;
+            userBuckets.put(userId, bucket);
+            return true;
+        }
+
+        return false; // limit exceeded
+    }
+}
+//user's window
+class UserBucket {
+    long windowStartTime;
+    int requestCount;
+
+    public UserBucket(long windowStartTime, int requestCount) {
+        this.windowStartTime = windowStartTime;
+        this.requestCount = requestCount;
+    }
+}
+
+
+//maintain deque for each new request, we will check window size in milliSeconds(if timewise valid then check request count if that is less than max push else block,if timewise invalid pop front of dequee) 
+class SlidingWindowLogRateLimiter implements RateLimiter {
+    private final int maxRequests;
+    private final long windowSizeInMillis;
+
+    // userId → list of timestamps
+    private final Map<String, Deque<Long>> userRequestLogs = new HashMap<>();
+
+    public SlidingWindowLogRateLimiter(int maxRequests, long windowSizeInSeconds) {
+        this.maxRequests = maxRequests;
+        this.windowSizeInMillis = windowSizeInSeconds * 1000;
+    }
+
+    @Override
+    public synchronized boolean allowRequest(String userId) {
+        long currentTime = System.currentTimeMillis();
+        userRequestLogs.putIfAbsent(userId, new LinkedList<>());
+        Deque<Long> logs = userRequestLogs.get(userId);
+
+        // Remove outdated timestamps
+        while (!logs.isEmpty() && currentTime - logs.peekFirst() >= windowSizeInMillis) {
+            logs.pollFirst();
+        }
+
+        if (logs.size() < maxRequests) {
+            logs.offerLast(currentTime);
+            return true;
+        }
+
+        return false;
+    }
+}
+
+class TokenBucket {
+    double tokens;
+    final int capacity;
+    final double refillRatePerMillis;
+    long lastRefillTimestamp;//last time user requested that time we counted tokens , for new request as per currentTime and lastRefillTimestamp we will fond out updated token max(capacity,calc)
+
+    public TokenBucket(int capacity, double refillRatePerSecond, long currentTime) {
+        this.capacity = capacity;
+        this.tokens = capacity; // start full
+        this.refillRatePerMillis = refillRatePerSecond / 1000.0;
+        this.lastRefillTimestamp = currentTime;
+    }
+
+    public void refill(long currentTime) {
+        long elapsed = currentTime - lastRefillTimestamp;
+        double refillTokens = elapsed * refillRatePerMillis;
+
+        tokens = Math.min(capacity, tokens + refillTokens);
+        lastRefillTimestamp = currentTime;
+    }
+}
+class TokenBucketRateLimiter implements RateLimiter {
+    private final int maxTokens;
+    private final double refillRatePerSecond; // tokens per second
+
+    // userId → TokenBucket
+	//each user will have its tokenBucket for rate limiter
+    private final Map<String, TokenBucket> userBuckets = new HashMap<>();
+
+    public TokenBucketRateLimiter(int maxTokens, double refillRatePerSecond) {
+        this.maxTokens = maxTokens;
+        this.refillRatePerSecond = refillRatePerSecond;
+    }
+
+    @Override
+    public synchronized boolean allowRequest(String userId) {
+        long currentTime = System.currentTimeMillis();
+
+        userBuckets.putIfAbsent(userId, new TokenBucket(maxTokens, refillRatePerSecond, currentTime));
+        TokenBucket bucket = userBuckets.get(userId);
+
+        bucket.refill(currentTime);
+
+        if (bucket.tokens >= 1) {
+            bucket.tokens -= 1;
+            return true;
+        }
+
+        return false; // No tokens left
+    }
+}
+
+
+
+public class RateLimiterApp {
+    public static void main(String[] args) throws InterruptedException {
+        RateLimiter limiter = new FixedWindowRateLimiter(3, 10); // 3 requests per 10 seconds
+        String user = "user1";
+
+        for (int i = 0; i < 5; i++) {
+            boolean allowed = limiter.allowRequest(user);
+            System.out.println("Request " + (i + 1) + ": " + (allowed ? "Allowed" : "Blocked"));
+            Thread.sleep(2000); // 2 sec delay
+        }
+    }
+}
+
+
+
