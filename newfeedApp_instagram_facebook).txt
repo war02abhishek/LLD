@@ -1,0 +1,121 @@
+class User {
+    String userId;
+    String name;
+
+    Set<User> followers = new HashSet<>();
+    Set<User> following = new HashSet<>();
+
+    public User(String id, String name) {
+        this.userId = id;
+        this.name = name;
+    }
+
+    public void follow(User user) {
+        following.add(user);
+        user.followers.add(this);
+    }
+
+    public void unfollow(User user) {
+        following.remove(user);
+        user.followers.remove(this);
+    }
+}
+
+
+class Post {
+    String postId;
+    User createdBy;
+    String content;
+    LocalDateTime createdAt;
+
+    List<Comment> comments = new ArrayList<>();
+    Set<User> likedBy = new HashSet<>();
+
+    public Post(String postId, User user, String content) {
+        this.postId = postId;
+        this.createdBy = user;
+        this.content = content;
+        this.createdAt = LocalDateTime.now();
+    }
+
+    public void like(User user) {
+        likedBy.add(user);
+    }
+
+    public void comment(User user, String text) {
+        comments.add(new Comment(user, text));
+    }
+}
+
+
+class Comment {
+    User user;
+    String text;
+    LocalDateTime time;
+
+    public Comment(User user, String text) {
+        this.user = user;
+        this.text = text;
+        this.time = LocalDateTime.now();
+    }
+}
+class FeedService {
+    Map<String, List<Post>> userPosts = new HashMap<>(); // userId → list of their posts
+
+    public void postContent(User user, String content) {
+        Post post = new Post(UUID.randomUUID().toString(), user, content);
+        userPosts.putIfAbsent(user.userId, new ArrayList<>());
+        userPosts.get(user.userId).add(post);
+    }
+
+    public List<Post> getFeed(User user) {
+        PriorityQueue<Post> pq = new PriorityQueue<>(
+            (a, b) -> b.createdAt.compareTo(a.createdAt) // latest first
+        );
+
+        // Include own posts
+        if (userPosts.containsKey(user.userId)) {
+            pq.addAll(userPosts.get(user.userId));
+        }
+
+        // Include posts from people they follow
+        for (User followingUser : user.following) {
+            if (userPosts.containsKey(followingUser.userId)) {
+                pq.addAll(userPosts.get(followingUser.userId));
+            }
+        }
+
+        List<Post> feed = new ArrayList<>();
+        int FEED_LIMIT = 10;
+
+        while (!pq.isEmpty() && feed.size() < FEED_LIMIT) {
+            feed.add(pq.poll());
+        }
+
+        return feed;
+    }
+}
+
+
+public class NewsFeedApp {
+    public static void main(String[] args) {
+        User u1 = new User("U1", "Abhishek");
+        User u2 = new User("U2", "Nikita");
+        User u3 = new User("U3", "Ajay");
+
+        FeedService feedService = new FeedService();
+
+        u1.follow(u2);
+        u1.follow(u3);
+
+        feedService.postContent(u2, "Hey, just watched a great movie!");
+        feedService.postContent(u3, "It's a sunny day out!");
+        feedService.postContent(u1, "Started learning system design.");
+
+        List<Post> u1Feed = feedService.getFeed(u1);
+        System.out.println("News Feed for " + u1.name + ":");
+        for (Post p : u1Feed) {
+            System.out.println(p.createdBy.name + ": " + p.content);
+        }
+    }
+}
