@@ -1,0 +1,136 @@
+class User {
+    private final String userId;
+    private String name;
+    private Wallet wallet;
+
+    public User(String userId, String name) {
+        this.userId = userId;
+        this.name = name;
+        this.wallet = new Wallet(this);
+    }
+
+    public Wallet getWallet() {
+        return wallet;
+    }
+
+    public String getUserId() {
+        return userId;
+    }
+
+    public String getName() {
+        return name;
+    }
+}
+
+
+class Wallet {
+    private final User owner;
+    private double balance;
+    private final List<Transaction> transactions;
+
+    public Wallet(User owner) {
+        this.owner = owner;
+        this.balance = 0.0;
+        this.transactions = new ArrayList<>();
+    }
+
+    public synchronized void addFunds(double amount, String description) {
+        balance += amount;
+        transactions.add(new Transaction("CREDIT", amount, description));
+    }
+
+    public synchronized boolean deductFunds(double amount, String description) {
+        if (balance >= amount) {
+            balance -= amount;
+            transactions.add(new Transaction("DEBIT", amount, description));
+            return true;
+        }
+        return false;
+    }
+
+    public synchronized double getBalance() {
+        return balance;
+    }
+
+    public List<Transaction> getTransactions() {
+        return transactions;
+    }
+}
+
+class Transaction {
+    private final String type; // CREDIT or DEBIT
+    private final double amount;
+    private final String description;
+    private final LocalDateTime timestamp;
+
+    public Transaction(String type, double amount, String description) {
+        this.type = type;
+        this.amount = amount;
+        this.description = description;
+        this.timestamp = LocalDateTime.now();
+    }
+
+    public String toString() {
+        return "[" + timestamp + "] " + type + " ₹" + amount + " - " + description;
+    }
+}
+
+class WalletService {
+    public void addFunds(User user, double amount) {
+        user.getWallet().addFunds(amount, "Wallet top-up");
+        System.out.println("✅ " + amount + " added to " + user.getName() + "'s wallet.");
+    }
+
+    public boolean transferFunds(User sender, User receiver, double amount) {
+        synchronized (this) {
+            Wallet senderWallet = sender.getWallet();
+            Wallet receiverWallet = receiver.getWallet();
+
+            if (senderWallet.deductFunds(amount, "Transfer to " + receiver.getName())) {
+                receiverWallet.addFunds(amount, "Received from " + sender.getName());
+                System.out.println("💸 ₹" + amount + " transferred from " + sender.getName() + " to " + receiver.getName());
+                return true;
+            } else {
+                System.out.println("❌ Transfer failed: Insufficient balance.");
+                return false;
+            }
+        }
+    }
+
+    public void showBalance(User user) {
+        System.out.println("💰 Balance for " + user.getName() + ": ₹" + user.getWallet().getBalance());
+    }
+
+    public void showTransactions(User user) {
+        System.out.println("📜 Transaction history for " + user.getName() + ":");
+        for (Transaction t : user.getWallet().getTransactions()) {
+            System.out.println(t);
+        }
+    }
+}
+
+public class DigitalWalletApp {
+    public static void main(String[] args) {
+        User alice = new User("U1", "Alice");
+        User bob = new User("U2", "Bob");
+
+        WalletService walletService = new WalletService();
+
+        walletService.addFunds(alice, 1000);
+        walletService.addFunds(bob, 500);
+
+        walletService.showBalance(alice);
+        walletService.showBalance(bob);
+
+        walletService.transferFunds(alice, bob, 300);
+        walletService.transferFunds(bob, alice, 800); // should fail
+
+        walletService.showBalance(alice);
+        walletService.showBalance(bob);
+
+        walletService.showTransactions(alice);
+        walletService.showTransactions(bob);
+    }
+}
+
+
