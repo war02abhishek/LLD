@@ -1,0 +1,200 @@
+abstract class Split {
+    User user;
+    double amount;
+
+    public Split(User user) {
+        this.user = user;
+    }
+
+    public void setAmount(double amt) {
+        this.amount = amt;
+    }
+
+    public double getAmount() {
+        return this.amount;
+    }
+
+    public User getUser() {
+        return this.user;
+    }
+}
+//every one will have equal share
+class EqualSplit extends Split {
+    public EqualSplit(User user) {
+        super(user);
+    }
+}
+//every one will have custom share which we know
+class ExactSplit extends Split {
+    public ExactSplit(User user, double amount) {
+        super(user);
+        this.amount = amount;
+    }
+}
+//every one will have its share in percentage
+class PercentSplit extends Split {
+    double percent;
+
+    public PercentSplit(User user, double percent) {
+        super(user);
+        this.percent = percent;
+    }
+}
+
+
+
+
+enum ExpenseType {
+    EQUAL, EXACT, PERCENT
+}
+
+abstract class Expense {
+    String expenseId;
+    String description;
+    User paidBy;
+    double amount;
+    List<Split> splits;
+    ExpenseType type;
+
+    public Expense(String id, String desc, User paidBy, double amount, List<Split> splits, ExpenseType type) {
+        this.expenseId = id;
+        this.description = desc;
+        this.paidBy = paidBy;
+        this.amount = amount;
+        this.splits = splits;
+        this.type = type;
+    }
+
+    public abstract boolean validate();
+}
+
+class EqualExpense extends Expense {
+    public EqualExpense(String id, String desc, User paidBy, double amount, List<Split> splits) {
+        super(id, desc, paidBy, amount, splits, ExpenseType.EQUAL);
+    }
+
+    @Override
+    public boolean validate() {
+        double equalAmt = amount / splits.size();
+        for (Split s : splits) {
+            s.setAmount(equalAmt);
+        }
+        return true;
+    }
+}
+
+class ExactExpense extends Expense {
+    public ExactExpense(String id, String desc, User paidBy, double amount, List<Split> splits) {
+        super(id, desc, paidBy, amount, splits, ExpenseType.EXACT);
+    }
+
+    @Override
+    public boolean validate() {
+        double total = 0;
+        for (Split s : splits) total += s.getAmount();
+        return Math.abs(total - amount) < 0.01;
+    }
+}
+
+class PercentExpense extends Expense {
+    public PercentExpense(String id, String desc, User paidBy, double amount, List<Split> splits) {
+        super(id, desc, paidBy, amount, splits, ExpenseType.PERCENT);
+    }
+
+    @Override
+    public boolean validate() {
+        double totalPercent = 0;
+        for (Split s : splits) {
+            PercentSplit ps = (PercentSplit) s;
+            totalPercent += ps.percent;
+            ps.setAmount((ps.percent * amount) / 100);
+        }
+        return Math.abs(totalPercent - 100.0) < 0.01;
+    }
+}
+
+class BalanceSheet {
+    Map<User, Map<User, Double>> balances = new HashMap<>();
+
+    public void updateBalance(User paidBy, List<Split> splits) {
+        for (Split split : splits) {
+            User owedBy = split.getUser();
+            if (owedBy == paidBy) continue;
+
+            double amount = split.getAmount();
+            balances.putIfAbsent(paidBy, new HashMap<>());
+            balances.putIfAbsent(owedBy, new HashMap<>());
+
+            // paidBy should receive from owedBy
+            balances.get(paidBy).put(owedBy,
+                balances.get(paidBy).getOrDefault(owedBy, 0.0) + amount);
+
+            balances.get(owedBy).put(paidBy,
+                balances.get(owedBy).getOrDefault(paidBy, 0.0) - amount);
+        }
+    }
+
+    public void showBalance(User user) {
+        if (!balances.containsKey(user)) {
+            System.out.println(user.name + " has no balances.");
+            return;
+        }
+
+        for (Map.Entry<User, Double> entry : balances.get(user).entrySet()) {
+            if (entry.getValue() > 0) {
+                System.out.println(entry.getKey().name + " owes " + user.name + ": ₹" + entry.getValue());
+            } else if (entry.getValue() < 0) {
+                System.out.println(user.name + " owes " + entry.getKey().name + ": ₹" + (-entry.getValue()));
+            }
+        }
+    }
+}
+
+class ExpenseService {
+    BalanceSheet balanceSheet = new BalanceSheet();
+
+    public void addExpense(Expense expense) {
+        if (!expense.validate()) {
+            System.out.println("Invalid expense split");
+            return;
+        }
+        balanceSheet.updateBalance(expense.paidBy, expense.splits);
+    }
+
+    public void showUserBalance(User user) {
+        balanceSheet.showBalance(user);
+    }
+}
+
+
+public class SplitwiseApp {
+    public static void main(String[] args) {
+        User u1 = new User("U1", "Abhi", "a@x.com");
+        User u2 = new User("U2", "Nikita", "n@x.com");
+        User u3 = new User("U3", "Ajay", "aj@x.com");
+
+        ExpenseService service = new ExpenseService();
+
+        // Abhi paid ₹300 split equally among 3
+        List<Split> equalSplits = Arrays.asList(
+            new EqualSplit(u1),
+            new EqualSplit(u2),
+            new EqualSplit(u3)
+        );
+        Expense expense1 = new EqualExpense("E1", "Dinner", u1, 300, equalSplits);
+        service.addExpense(expense1);
+
+        // Nikita paid ₹150 for herself and Abhi, exact split
+        List<Split> exactSplits = Arrays.asList(
+            new ExactSplit(u1, 70),
+            new ExactSplit(u2, 80)
+        );
+        Expense expense2 = new ExactExpense("E2", "Snacks", u2, 150, exactSplits);
+        service.addExpense(expense2);
+
+        System.out.println("\nBalances:");
+        service.showUserBalance(u1);
+        service.showUserBalance(u2);
+        service.showUserBalance(u3);
+    }
+}
