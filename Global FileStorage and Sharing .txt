@@ -1,0 +1,227 @@
+Global file storage and sharing service 
+
+
+1. old version of documents can be saved to rollback
+2. All the files should be updated across the devices in sync 
+3. user can save,share,delete and update files and photos over the internet
+
+
+user can login from device in its account then he will upload file if already version of file exists we will update its version
+,delete,sharing means sharing copy of my file to other user.All files should be in sync in all devices
+
+
+
+user{
+  id,
+  password,
+  Library
+}
+
+//library contains all files created and shared with me
+Library{
+  LibraryId
+  List<file>
+}
+
+file{
+  name:
+  version: List<file>list
+  modified_at
+  created_by: user
+  shared_by:user
+}  
+
+each device -> multiple user -> multiple files
+device{
+   List<User>list
+}
+
+FSSSerivce{
+
+User user;
+
+uploadFile(File f,User u){
+   Library mylib=u.getLirary();
+   //check already exist update version accordingly,update modifed at and then save to library
+   mylib.getFileList().add(f);
+}
+deleteFile(File f,User u){
+}
+shareFile(File f,User sender,User receiver){
+//add in library of receiver,with version of 1 as it will be new to it ,update file shared_by and save it
+}
+}
+
+
+Main(){
+
+User user1=new user("abhishek","password");
+Device d=new Mobile();
+d.userList()//find my user kind of with id,password,
+//inititate FSSSerivce with my user 
+FSSSerivce fservice=new FSSSerivce(myuser);
+File myfile=new File()
+fservice.uploadFile();
+fservice.deleteFile()
+fservice.shareFile()
+}
+
+
+
+file.version: List<file> means versioning is recursive (file has list of files). That can get messy.
+
+sharing file : until now we were just saving a copy in other users library which is space heavy but now we want to implement permission wise
+For sharing, instead of copying the file into each user’s library, I would go with a reference-based sharing model.
+In the File class, I will maintain:
+A list of users who have write access.
+A list of users who have read-only access.
+When a user with write access updates the file content, I will:
+Create a new FileVersion and attach it to the file.
+Since all users are referencing the same file, both readers and writers will see the latest version.
+Writers can continue updating.
+Readers will only be able to view or download the updated content but not modify it.
+This way, sharing remains consistent and real-time, and we avoid duplicating file data across multiple users
+like collabrative google doc 
+//********REFINED DESIGN*********
+class User {
+    String id;
+    String password;
+    Library library;
+}
+
+class Library {
+    String libraryId;
+    List<File> files;
+}
+
+class File {
+    String name;
+    User createdBy;
+    User sharedBy;
+    List<FileVersion> versions;
+	
+}
+
+class FileVersion {
+    int versionNumber;
+    String contentPath; // path in storage
+    LocalDateTime modifiedAt;
+	User modifiedBy;
+}
+
+class Device {
+    String deviceId;
+    User loggedInUser;
+}
+
+class FSSService {
+    void uploadFile(File file, User user) { ... }
+    void deleteFile(File file, User user) { ... }
+    void shareFile(File file, User sender, User receiver, Permission perm) { 
+	//if permission is read only
+
+	}
+    void rollbackFile(File file, int version) { ... }
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+*******************FINAL PROTOTYPE***************
+class User {
+    String userId;
+    String name;
+    String passwordHash;   // not plain password
+    Library library;
+    List<Device> devices;
+}
+
+class Device {
+    String deviceId;
+    String deviceType; // Mobile, Web, Desktop
+    User user;
+}
+
+class File {
+    String fileId;
+    String name;
+    User owner;
+    LocalDateTime createdAt;
+    LocalDateTime modifiedAt;
+    List<FileVersion> versions;
+    
+    // Access Control
+    List<User> readAccess;
+    List<User> writeAccess;
+}
+
+class FileVersion {
+    int versionNumber;
+    String contentHash;      // reference to actual file in object store
+    LocalDateTime createdAt;
+    User modifiedBy;
+}
+
+
+
+class Library {
+    String libraryId;
+    List<File> files;
+    List<Folder> folders;
+}
+
+class Folder {
+    String folderId;
+    String name;
+    List<File> files;
+    List<Folder> subFolders;
+}
+
+class SharePermission {
+    User sharedWith;
+    AccessType accessType; // READ, WRITE
+    LocalDateTime sharedAt;
+}
+
+enum AccessType {
+    READ,
+    WRITE
+}
+
+class FSSService {
+    
+    void uploadFile(File file, User user) {
+        // create first version, add to user’s library
+    }
+
+    void deleteFile(File file, User user) {
+        // soft delete -> move to trash
+    }
+
+    void shareFile(File file, User sender, User receiver, AccessType accessType) {
+        // update access list in File
+        // receiver’s library gets a reference, not a copy
+		file which is present in function paramter is refercen not a copy 
+    }
+
+    void rollbackFile(File file, int versionNumber, User user) {
+        // reset file head to an older version
+    }
+
+    List<File> listFiles(User user) {
+        return user.library.files;
+    }
+
+    void syncChanges(Device device) {
+        // fetch change log for user’s files since last sync
+    }
+}
